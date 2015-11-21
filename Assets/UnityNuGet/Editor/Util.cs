@@ -9,4 +9,9 @@ public static class Util
     {
         return paths.Aggregate<string, string>(null, (current, path) => current != null ? Path.Combine(current, path) : path);
     }
+
+    public static string BuildAssetsDirectory(string relativePath)
+    {
+        return CombinePaths(Application.dataPath, relativePath);
+    }
 }

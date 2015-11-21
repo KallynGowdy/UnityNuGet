@@ -9,7 +9,15 @@ public class NuGetWindow : EditorWindow
 {
     string packageName;
     string installResult;
-    NuGetViewModel viewModel;
+    private NuGetViewModel _viewModel;
+    private bool showPackages = false;
+    private Vector2 packagesScrollPos;
+
+    NuGetViewModel ViewModel
+    {
+        get { return _viewModel ?? (_viewModel = InitViewModel()); }
+        set { _viewModel = value; }
+    }
 
     /// <summary>
     /// Opens the NuGet Editor Window
@@ -18,8 +26,12 @@ public class NuGetWindow : EditorWindow
     public static void Init()
     {
         NuGetWindow nuget = EditorWindow.GetWindow<NuGetWindow>();
-        nuget.viewModel = new NuGetViewModel(new Preferences());
         nuget.Show();
+    }
+
+    private static NuGetViewModel InitViewModel()
+    {
+        return new NuGetViewModel(new Preferences());
     }
 
     void OnGUI()
@@ -27,14 +39,35 @@ public class NuGetWindow : EditorWindow
         packageName = EditorGUILayout.TextField("Package", packageName);
         if (GUILayout.Button("Install Package"))
         {
-            if (viewModel.InstallPackage(packageName))
+            if (ViewModel.InstallPackage(packageName))
             {
-                installResult = "Installed!";
+                installResult = string.Format("Installed {0}!", packageName);
+            }
+            else
+            {
+                installResult = "Install Failed";
             }
         }
         if (installResult != null)
         {
             EditorGUILayout.SelectableLabel(installResult);
+        }
+        showPackages = EditorGUILayout.Foldout(showPackages, "Packages");
+        if (showPackages)
+        {
+
+            foreach (var package in ViewModel.Project.Dependencies)
+            {
+                EditorGUILayout.PrefixLabel(package.Key);
+                if (GUILayout.Button("X"))
+                {
+                    ViewModel.UninstallPackage(package.Key);
+                }
+            }
+            EditorGUILayout.BeginHorizontal();
+
+            EditorGUILayout.EndHorizontal();
+
         }
     }
 }
