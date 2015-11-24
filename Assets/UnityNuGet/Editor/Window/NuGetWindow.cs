@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Linq;
 using UnityEditor;
 
 /// <summary>
@@ -36,12 +37,14 @@ public class NuGetWindow : EditorWindow
 
     void OnGUI()
     {
+        var originalColor = GUI.backgroundColor;
         packageName = EditorGUILayout.TextField("Package", packageName);
         if (GUILayout.Button("Install Package"))
         {
             if (ViewModel.InstallPackage(packageName))
             {
                 installResult = string.Format("Installed {0}!", packageName);
+                packageName = "";
             }
             else
             {
@@ -55,19 +58,27 @@ public class NuGetWindow : EditorWindow
         showPackages = EditorGUILayout.Foldout(showPackages, "Packages");
         if (showPackages)
         {
-
-            foreach (var package in ViewModel.Project.Dependencies)
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+            var deps = ViewModel.Project.Dependencies.ToDictionary(d => d.Key, d => d.Value);
+            if (deps.Count == 0)
             {
-                EditorGUILayout.PrefixLabel(package.Key);
-                if (GUILayout.Button("X"))
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("There are no installed NuGet packages");
+                EditorGUILayout.EndHorizontal();
+            }
+            foreach (var package in deps)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PrefixLabel(string.Format("{0}@{1}", package.Key, package.Value.Version));
+                GUI.backgroundColor = Color.red;
+                if (GUILayout.Button(new GUIContent("X", "Remove Dependency"), GUILayout.MaxWidth(25)))
                 {
                     ViewModel.UninstallPackage(package.Key);
                 }
+                GUI.backgroundColor = originalColor;
+                EditorGUILayout.EndHorizontal();
             }
-            EditorGUILayout.BeginHorizontal();
-
-            EditorGUILayout.EndHorizontal();
-
+            EditorGUILayout.EndVertical();
         }
     }
 }

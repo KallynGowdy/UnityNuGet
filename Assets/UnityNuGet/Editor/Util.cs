@@ -7,7 +7,14 @@ public static class Util
 {
     public static string CombinePaths(params string[] paths)
     {
-        return paths.Aggregate<string, string>(null, (current, path) => current != null ? Path.Combine(current, path) : path);
+        return paths.Aggregate<string, string>(null, (current, path) =>
+        {
+            if (path == null)
+            {
+                return "";
+            }
+            return current != null ? Path.Combine(current, path) : path;
+        });
     }
 
     public static string BuildAssetsDirectory(string relativePath)

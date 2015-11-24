@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using JetBrains.Annotations;
 using Newtonsoft.Json;
 using UnityEditor;
 using Debug = UnityEngine.Debug;
@@ -54,7 +55,7 @@ public class NuGetProject
     {
         get
         {
-            return _frameworks ?? 
+            return _frameworks ??
                     (_frameworks = new Dictionary<string, object>()
                     {
                         {"net35", new object() }
@@ -111,8 +112,8 @@ public class NuGetProject
         {
             using (StreamReader reader = new StreamReader(File.OpenRead(fileLocation)))
             {
-                var project = JsonConvert.DeserializeObject<NuGetProject>(reader.ReadToEnd());
-                project._projectJsonLocation = fileLocation;
+                var json = JsonConvert.DeserializeObject<NuGetJsonProject>(reader.ReadToEnd());
+                var project = new NuGetProject(json) { _projectJsonLocation = fileLocation };
                 return project;
             }
         }
@@ -135,7 +136,8 @@ public class NuGetProject
         Debug.Log(string.Format("Saving NuGet project to '{0}'", fileLocation));
         using (StreamWriter writer = new StreamWriter(fileLocation))
         {
-            var s = JsonConvert.SerializeObject(project, Formatting.Indented);
+            var json = new NuGetJsonProject(project);
+            var s = JsonConvert.SerializeObject(json, Formatting.Indented);
             writer.Write(s);
             writer.Flush();
         }
@@ -150,6 +152,14 @@ public class NuGetProject
     {
         Dependencies = new Dictionary<string, NuGetDependency>();
         PackagesDirectory = "";
+    }
+
+    public NuGetProject([NotNull] NuGetJsonProject project)
+    {
+        if (project == null) throw new ArgumentNullException("project");
+        PackagesDirectory = project.PackagesDirectory;
+        RawDependencies = project.Dependencies;
+        Frameworks = project.Frameworks;
     }
 
     /// <summary>
