@@ -3,6 +3,7 @@ using UnityEngine;
 using System.Collections;
 using System.IO;
 using JetBrains.Annotations;
+using UniRx;
 using UnityEditor;
 
 /// <summary>
@@ -15,7 +16,7 @@ public class NuGetViewModel : ViewModelBase
     /// <summary>
     /// Gets the Path to the location that the NuGet project.json file is at.
     /// </summary>
-    public string PackagesJsonLocation { get; private set; }
+    public ReactiveProperty<string> PackagesJsonLocation { get; private set; }
 
     /// <summary>
     /// Gets the project that this view model houses.
@@ -24,13 +25,18 @@ public class NuGetViewModel : ViewModelBase
 
     public IPreferences Preferences { get; private set; }
 
+    public ReactiveProperty<string> InstallMessage { get; private set; }
+
+    public ReactiveProperty<string> Package { get; private set; }
+
     public NuGetViewModel([NotNull] IPreferences preferences)
     {
         if (preferences == null) throw new ArgumentNullException("preferences");
         Preferences = preferences;
-        PackagesJsonLocation = Preferences.GetString("PackagesJsonLocation", Util.CombinePaths(Application.dataPath, "project.json"));
+        PackagesJsonLocation = new ReactiveProperty<string>(Preferences.GetString("PackagesJsonLocation", Util.CombinePaths(Application.dataPath, "project.json")));
         Debug.Log(string.Format("Load Project from File: '{0}'", PackagesJsonLocation));
-        Project = NuGetProject.LoadFromFile(PackagesJsonLocation, DefaultPackagesDirectory);
+        Project = NuGetProject.LoadFromFile(PackagesJsonLocation.Value, DefaultPackagesDirectory);
+        InstallMessage = new ReactiveProperty<string>();
     }
 
     /// <summary>
@@ -38,20 +44,27 @@ public class NuGetViewModel : ViewModelBase
     /// </summary>
     /// <param name="package"></param>
     /// <returns></returns>
-    public bool InstallPackage(string package)
+    public void InstallPackage()
     {
-        var installResult = Project.InstallDependency(package);
-        switch (installResult)
+        var installResult = Project.InstallDependency(Package.Value);
+        if (installResult.Succeeded)
         {
-            case InstallResult.InstallSucceeded:
-                Project.Save();
-                return true;
-            case InstallResult.InstallSucceededButNoSupportedFrameworks:
-                Project.UninstallDependency(package);
-                Project.Save();
-                return false;
-            default:
-                return false;
+            switch (installResult.Result)
+            {
+                case InstallResult.InstallSucceeded:
+                    Project.Save();
+                    InstallMessage.Value = string.Format("Installed {0}!", Package.Value);
+                    break;
+                case InstallResult.InstallSucceededButNoSupportedFrameworks:
+                    Project.UninstallDependency(Package.Value);
+                    Project.Save();
+                    InstallMessage.Value = "The Package was Found, but it did not contain any library for .Net 3.5";
+                    break;
+            }
+        }
+        else
+        {
+            InstallMessage.Value = "The Package Could Not Be Installed.";
         }
     }
 

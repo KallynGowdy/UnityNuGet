@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json;
 
 /// <summary>
@@ -18,7 +19,7 @@ public class NuGetJsonProject
     {
         Dependencies = project.RawDependencies;
         PackagesDirectory = project.PackagesDirectory;
-        Frameworks = project.Frameworks;
+        Frameworks = project.Frameworks.ToDictionary(f => f.Key, f => f.Value);
     }
 
     [JsonProperty("frameworks")]

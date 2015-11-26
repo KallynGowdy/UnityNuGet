@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using JetBrains.Annotations;
 using Newtonsoft.Json;
+using UniRx;
 using UnityEditor;
 using Debug = UnityEngine.Debug;
 
@@ -33,7 +34,15 @@ public class NuGetProject
         get { return Dependencies.ToDictionary(d => d.Key, d => d.Value.Version); }
         set
         {
-            Dependencies = value == null ? null : value.ToDictionary(d => d.Key, d => new NuGetDependency(d.Value, d.Key, AbsolutePackagesDirectory));
+            Dependencies.Clear();
+            if (value != null)
+            {
+                var packagesDirectory = AbsolutePackagesDirectory;
+                foreach (var d in value)
+                {
+                    Dependencies.Add(d.Key, new NuGetDependency(d.Value, d.Key, packagesDirectory));
+                }
+            }
         }
     }
 
@@ -41,9 +50,9 @@ public class NuGetProject
     /// Gets the list of NuGet dependencies that the project has.
     /// </summary>
     [JsonIgnore]
-    public Dictionary<string, NuGetDependency> Dependencies
+    public ReactiveDictionary<string, NuGetDependency> Dependencies
     {
-        get { return _dependencies ?? (_dependencies = new Dictionary<string, NuGetDependency>()); }
+        get { return _dependencies ?? (_dependencies = new ReactiveDictionary<string, NuGetDependency>()); }
         private set { _dependencies = value; }
     }
 
@@ -51,12 +60,12 @@ public class NuGetProject
     /// Gets the list of frameworks that are supported by this project.
     /// </summary>
     [JsonProperty("frameworks")]
-    public Dictionary<string, object> Frameworks
+    public ReactiveDictionary<string, object> Frameworks
     {
         get
         {
             return _frameworks ??
-                    (_frameworks = new Dictionary<string, object>()
+                    (_frameworks = new ReactiveDictionary<string, object>()
                     {
                         {"net35", new object() }
                     });
@@ -98,8 +107,8 @@ public class NuGetProject
     private string _projectJsonLocation;
 
     private string _packagesDirectory;
-    private Dictionary<string, object> _frameworks;
-    private Dictionary<string, NuGetDependency> _dependencies;
+    private ReactiveDictionary<string, object> _frameworks;
+    private ReactiveDictionary<string, NuGetDependency> _dependencies;
 
     /// <summary>
     /// Loads the <see cref="NuGetProject"/> from the given file location, or creates a new project at the location if none exists.
@@ -150,7 +159,7 @@ public class NuGetProject
 
     public NuGetProject()
     {
-        Dependencies = new Dictionary<string, NuGetDependency>();
+        Dependencies = new ReactiveDictionary<string, NuGetDependency>();
         PackagesDirectory = "";
     }
 
@@ -159,7 +168,7 @@ public class NuGetProject
         if (project == null) throw new ArgumentNullException("project");
         PackagesDirectory = project.PackagesDirectory;
         RawDependencies = project.Dependencies;
-        Frameworks = project.Frameworks;
+        Frameworks = project.Frameworks.ToReactiveDictionary();
     }
 
     /// <summary>
@@ -181,7 +190,7 @@ public class NuGetProject
     /// <param name="requireConsent"></param>
     /// <param name="solutionDirectory"></param>
     /// <returns></returns>
-    public InstallResult InstallDependency(string dependency, string outputDirectory = null, string version = null, bool? prerelease = null, bool? noCash = null, bool? requireConsent = null, string solutionDirectory = null)
+    public NuGetOperationResult<InstallResult> InstallDependency(string dependency, string outputDirectory = null, string version = null, bool? prerelease = null, bool? noCash = null, bool? requireConsent = null, string solutionDirectory = null)
     {
         string output = NuGetCommand(string.Format("install {0}", dependency), new
         {
@@ -196,14 +205,11 @@ public class NuGetProject
                 var match = matches.Cast<Match>().Last();
                 var dep = new NuGetDependency(match.Groups["version"].ToString(), dependency, AbsolutePackagesDirectory);
                 Dependencies.Add(dependency, dep);
-                return dep.RemoveUnsupportedFrameworks(Frameworks) ? InstallResult.InstallSucceeded : InstallResult.InstallSucceededButNoSupportedFrameworks;
+                return dep.RemoveUnsupportedFrameworks(Frameworks) ? NuGetOperationResult<InstallResult>.Success(InstallResult.InstallSucceeded) : NuGetOperationResult<InstallResult>.Success(InstallResult.InstallSucceededButNoSupportedFrameworks);
             }
-            return InstallResult.InstallSucceeded;
         }
-        else
-        {
-            return InstallResult.InstallFailed;
-        }
+        return NuGetOperationResult<InstallResult>.Error(output);
+
     }
 
     public bool UninstallDependency(string dependency)
@@ -249,10 +255,7 @@ public class NuGetProject
             using (StreamReader stream = process.StandardOutput)
             {
                 string output = stream.ReadToEnd();
-                if (process.WaitForExit(20000) && process.ExitCode == 0)
-                {
-                    return output;
-                }
+                return output;
             }
         }
         return null;

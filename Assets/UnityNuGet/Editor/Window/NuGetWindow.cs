@@ -1,6 +1,10 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using System.Collections;
 using System.Linq;
+using TruGUI.Controls;
+using TruGUI.Enums;
+using UniRx;
 using UnityEditor;
 
 /// <summary>
@@ -9,10 +13,23 @@ using UnityEditor;
 public class NuGetWindow : EditorWindow
 {
     string packageName;
-    string installResult;
     private NuGetViewModel _viewModel;
     private bool showPackages = false;
     private Vector2 packagesScrollPos;
+
+    Button _installButton = new Button("Install Package")
+    {
+        IsLayout = true
+    };
+    Label _installPackageLabel = new Label(new GUIElementOptions())
+    {
+        IsLayout = true
+    };
+
+    Group _packagesGroup = new Group(GroupSortingType.Vertical)
+    {
+        IsLayout = true
+    };
 
     NuGetViewModel ViewModel
     {
@@ -27,7 +44,40 @@ public class NuGetWindow : EditorWindow
     public static void Init()
     {
         NuGetWindow nuget = EditorWindow.GetWindow<NuGetWindow>();
+        nuget.titleContent = new GUIContent("NuGet");
         nuget.Show();
+    }
+
+    public NuGetWindow()
+    {
+        ViewModel.InstallMessage.BindTo(this, (v, m) => v._installPackageLabel.Text = m);
+        _installButton.BindCommand(ViewModel, vm => vm.InstallPackage());
+        ViewModel.Project.Dependencies.ObserveCountChanged().Subscribe(c => SetPackagesElements());
+        SetPackagesElements();
+    }
+
+    private void SetPackagesElements()
+    {
+        _packagesGroup.Elements = ViewModel.Project.Dependencies.Select(d =>
+        {
+            var removeDependencyButton = new Button("X", string.Format("Remove {0}", d.Key))
+            {
+                Color = Color.red
+            };
+            removeDependencyButton.BindCommand(ViewModel, vm => vm.UninstallPackage(d.Key));
+
+            return (TruGUIElement) new Group(GroupSortingType.Horizontal)
+            {
+                Elements = new TruGUIElement[]
+                {
+                    new Label(new GUIElementOptions())
+                    {
+                        Text = string.Format("{0}@{1}", d.Key, d.Value.Version)
+                    },
+                    removeDependencyButton
+                }
+            };
+        }).ToArray();
     }
 
     private static NuGetViewModel InitViewModel()
@@ -39,46 +89,33 @@ public class NuGetWindow : EditorWindow
     {
         var originalColor = GUI.backgroundColor;
         packageName = EditorGUILayout.TextField("Package", packageName);
-        if (GUILayout.Button("Install Package"))
-        {
-            if (ViewModel.InstallPackage(packageName))
-            {
-                installResult = string.Format("Installed {0}!", packageName);
-                packageName = "";
-            }
-            else
-            {
-                installResult = "Install Failed";
-            }
-        }
-        if (installResult != null)
-        {
-            EditorGUILayout.SelectableLabel(installResult);
-        }
-        showPackages = EditorGUILayout.Foldout(showPackages, "Packages");
-        if (showPackages)
-        {
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            var deps = ViewModel.Project.Dependencies.ToDictionary(d => d.Key, d => d.Value);
-            if (deps.Count == 0)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("There are no installed NuGet packages");
-                EditorGUILayout.EndHorizontal();
-            }
-            foreach (var package in deps)
-            {
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.PrefixLabel(string.Format("{0}@{1}", package.Key, package.Value.Version));
-                GUI.backgroundColor = Color.red;
-                if (GUILayout.Button(new GUIContent("X", "Remove Dependency"), GUILayout.MaxWidth(25)))
-                {
-                    ViewModel.UninstallPackage(package.Key);
-                }
-                GUI.backgroundColor = originalColor;
-                EditorGUILayout.EndHorizontal();
-            }
-            EditorGUILayout.EndVertical();
-        }
+        _installButton.Draw();
+        _installPackageLabel.Draw();
+        _packagesGroup.IsVisible = EditorGUILayout.Foldout(_packagesGroup.IsVisible, "Installed Packages");
+        _packagesGroup.Draw();
+        //if (showPackages)
+        //{
+        //    EditorGUILayout.BeginVertical(GUI.skin.box);
+        //    var deps = ViewModel.Project.Dependencies.ToDictionary(d => d.Key, d => d.Value); // Copy the dependencies so that they are not modified while looping
+        //    if (deps.Count == 0)
+        //    {
+        //        EditorGUILayout.BeginHorizontal();
+        //        EditorGUILayout.LabelField("There are no installed NuGet packages");
+        //        EditorGUILayout.EndHorizontal();
+        //    }
+        //    foreach (var package in deps)
+        //    {
+        //        EditorGUILayout.BeginHorizontal();
+        //        EditorGUILayout.PrefixLabel(string.Format("{0}@{1}", package.Key, package.Value.Version));
+        //        GUI.backgroundColor = Color.red;
+        //        if (GUILayout.Button(new GUIContent("X", "Remove Dependency"), GUILayout.MaxWidth(25)))
+        //        {
+        //            ViewModel.UninstallPackage(package.Key);
+        //        }
+        //        GUI.backgroundColor = originalColor;
+        //        EditorGUILayout.EndHorizontal();
+        //    }
+        //    EditorGUILayout.EndVertical();
+        //}
     }
 }

@@ -32,7 +32,7 @@ public class NuGetDependency
     /// </summary>
     /// <param name="supportedFrameworks"></param>
     /// <returns></returns>
-    public bool RemoveUnsupportedFrameworks(Dictionary<string, object> supportedFrameworks)
+    public bool RemoveUnsupportedFrameworks(IDictionary<string, object> supportedFrameworks)
     {
         var frameworks = Directory.GetDirectories(LibPath).ToList();
         foreach (var unsupportedFramework in frameworks.Where(f => supportedFrameworks.All(sf => !f.EndsWith(sf.Key))).ToArray())
