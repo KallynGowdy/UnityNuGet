@@ -49,7 +49,19 @@ public class NuGetDependency
     /// <returns></returns>
     public bool Uninstall()
     {
-        Directory.Delete(InstallLocation, true);
+        if (IsInstalled())
+        {
+            Directory.Delete(InstallLocation, true);
+        }
         return true;
+    }
+
+    /// <summary>
+    /// Gets whether this dependency exists on disk.
+    /// </summary>
+    /// <returns></returns>
+    public bool IsInstalled()
+    {
+        return Directory.Exists(InstallLocation);
     }
 }

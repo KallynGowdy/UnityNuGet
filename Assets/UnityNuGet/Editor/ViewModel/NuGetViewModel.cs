@@ -22,6 +22,16 @@ public class NuGetViewModel : ViewModelBase
     /// </summary>
     public NuGetProject Project { get; private set; }
 
+    /// <summary>
+    /// Gets or sets the version that should be installed for the new package.
+    /// </summary>
+    public string NewPackageVersion { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the package that should be installed.
+    /// </summary>
+    public string NewPackageName { get; set; }
+
     public IPreferences Preferences { get; private set; }
 
     public NuGetViewModel([NotNull] IPreferences preferences)
@@ -38,16 +48,16 @@ public class NuGetViewModel : ViewModelBase
     /// </summary>
     /// <param name="package"></param>
     /// <returns></returns>
-    public bool InstallPackage(string package)
+    public bool InstallPackage()
     {
-        var installResult = Project.InstallDependency(package);
+        var installResult = Project.InstallDependency(NewPackageName, version: NewPackageVersion);
         switch (installResult)
         {
             case InstallResult.InstallSucceeded:
                 Project.Save();
                 return true;
             case InstallResult.InstallSucceededButNoSupportedFrameworks:
-                Project.UninstallDependency(package);
+                Project.UninstallDependency(NewPackageName);
                 Project.Save();
                 return false;
             default:
@@ -59,5 +69,15 @@ public class NuGetViewModel : ViewModelBase
     {
         Project.UninstallDependency(package);
         Project.Save();
+    }
+
+    public void RestoreMissingPackages()
+    {
+        Project.RestoreDependencies();
+    }
+
+    public bool IsMissingDependency()
+    {
+        return Project.IsMissingDependencies();
     }
 }

@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Text;
 using System.Text.RegularExpressions;
 using JetBrains.Annotations;
@@ -170,8 +171,30 @@ public class NuGetProject
         SaveToFile(_projectJsonLocation, this);
     }
 
+    public void RestoreDependencies()
+    {
+        foreach (var missingDep in GetMissingDependencies().ToArray())
+        {
+            InstallDependency(missingDep.Name, version: missingDep.Version);
+        }
+    }
+
+    public IEnumerable<NuGetDependency> GetMissingDependencies()
+    {
+        return Dependencies.Where(d => !d.Value.IsInstalled()).Select(d => d.Value);
+    }
+
     /// <summary>
-    /// Installs the given NuGet dependency in the project.
+    /// Checks the file system to determine if any dependencies are missing.
+    /// </summary>
+    /// <returns></returns>
+    public bool IsMissingDependencies()
+    {
+        return GetMissingDependencies().Any();
+    }
+
+    /// <summary>
+    /// Installs or updates the given NuGet dependency in the project.
     /// </summary>
     /// <param name="dependency"></param>
     /// <param name="outputDirectory"></param>
@@ -183,10 +206,14 @@ public class NuGetProject
     /// <returns></returns>
     public InstallResult InstallDependency(string dependency, string outputDirectory = null, string version = null, bool? prerelease = null, bool? noCash = null, bool? requireConsent = null, string solutionDirectory = null)
     {
+        if (Dependencies.ContainsKey(dependency))
+        {
+            UninstallDependency(dependency);
+        }
         string output = NuGetCommand(string.Format("install {0}", dependency), new
         {
             o = outputDirectory,
-            v = version
+            version = version
         });
         if (output != null)
         {
@@ -194,9 +221,12 @@ public class NuGetProject
             if (matches.Count > 0)
             {
                 var match = matches.Cast<Match>().Last();
-                var dep = new NuGetDependency(match.Groups["version"].ToString(), dependency, AbsolutePackagesDirectory);
+                var dep = new NuGetDependency(match.Groups["version"].ToString(), dependency,
+                    AbsolutePackagesDirectory);
                 Dependencies.Add(dependency, dep);
-                return dep.RemoveUnsupportedFrameworks(Frameworks) ? InstallResult.InstallSucceeded : InstallResult.InstallSucceededButNoSupportedFrameworks;
+                return dep.RemoveUnsupportedFrameworks(Frameworks)
+                    ? InstallResult.InstallSucceeded
+                    : InstallResult.InstallSucceededButNoSupportedFrameworks;
             }
             return InstallResult.InstallSucceeded;
         }
@@ -230,7 +260,7 @@ public class NuGetProject
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.CanRead)
                 .Select(p => new { name = p.Name, val = p.GetValue(options, null) })
-                .Where(p => p.val != null)
+                .Where(p => p.val != null && p.val.ToString() != "")
                 .Select(p => string.Format("-{0} {1}", p.name, p.val)).ToArray()));
         }
         Debug.Log(string.Format("NuGetCommand: '{0}'", s));
